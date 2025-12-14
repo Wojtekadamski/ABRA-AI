@@ -1,6 +1,6 @@
 import numpy as np
-from sklearn.neural_network import MLPRegressor
-from sklearn.preprocessing import StandardScaler
+from sklearn.neural_network import MLPRegressor # Wielowarstwowy Perceptron do regresji
+from sklearn.preprocessing import StandardScaler # Skalowanie cech
 from typing import List
 import logging
 
@@ -10,34 +10,38 @@ logger = logging.getLogger(__name__)
 
 class TrafficPredictor:
     def __init__(self):
+        self.window_size = 20 # Liczba ostatnich punktów używanych do predykcji (Musi być taka sama jak HISTORY_WINDOW_SIZE w Javie!)
+
         self.model = MLPRegressor(
-            hidden_layer_sizes=(64, 32, 16),
-            activation='relu',
-            solver='adam',
-            max_iter=1000,
-            random_state=42,
-            early_stopping=True,
-            validation_fraction=0.2,
-            n_iter_no_change=10,
-            alpha=0.001
+            hidden_layer_sizes=(64, 32, 16), # Architektura sieci (neurony w warstwach ukrytych)
+            activation='relu', # Funkcja aktywacji ReLU 
+            solver='adam', # Optymalizator 
+            max_iter=1000, # Maksymalna liczba iteracji treningu
+            random_state=42, # Ustawienie ziarna losowości dla powtarzalności
+            early_stopping=True, # Wczesne zatrzymanie, aby uniknąć przeuczenia
+            validation_fraction=0.2, # Frakcja danych walidacyjnych do wczesnego zatrzymania 
+            n_iter_no_change=10, # Liczba iteracji bez poprawy przed zatrzymaniem 
+            alpha=0.001 # Współczynnik regularyzacji L2 
         )
-        self.scaler = StandardScaler()
-        self.is_trained = False
-        self.model_version = "1.0.0"
+        self.scaler = StandardScaler() # Skalowanie cech 
+        self.is_trained = False # Flaga wskazująca, czy model jest wytrenowany
+        self.model_version = "1.0.0" # Wersja modelu 
         
     def train_on_synthetic_data(self, n_samples: int = 1000):
-        logger.info(f"Generating {n_samples} synthetic samples...")
+        logger.info(f"Generating {n_samples} synthetic samples (WINDOW={self.window_size})...")
         
         X_train = []
         y_train = []
         
-        for i in range(n_samples):
+        for i in range(n_samples): # Generowanie syntetycznych danych
             time_offset = i * 0.1
             
             base_pattern = 50 + 30 * np.sin(time_offset)
             weekly_trend = 10 * np.sin(time_offset / 7)
-            noise = np.random.normal(0, 5, 5)
-            spike = np.random.choice([0, 20], size=5, p=[0.9, 0.1])
+            
+            # Używamy zmiennej self.window_size zamiast sztywnej liczby
+            noise = np.random.normal(0, 5, self.window_size) 
+            spike = np.random.choice([0, 20], size=self.window_size, p=[0.9, 0.1]) 
             
             traffic_sequence = base_pattern + weekly_trend + noise + spike
             traffic_sequence = np.maximum(traffic_sequence, 0)
@@ -63,8 +67,20 @@ class TrafficPredictor:
         if not self.is_trained:
             raise ValueError("Model not trained")
         
-        if len(recent_traffic) != 5:
-            raise ValueError("Expected 5 traffic values")
+        # --- DYNAMICZNE DOPASOWANIE ROZMIARU ---
+        current_size = len(recent_traffic)
+        
+        # Jeśli Java wysłała za mało, uzupełnij zerami z przodu
+        if current_size < self.window_size:
+            padding = [0.0] * (self.window_size - current_size)
+            recent_traffic = padding + recent_traffic
+            
+        # Jeśli Java wysłała za dużo, weź tylko ostatnie N elementów
+        elif current_size > self.window_size:
+            recent_traffic = recent_traffic[-self.window_size:]
+            
+        # Teraz mamy pewność, że rozmiar pasuje do self.window_size
+        # ----------------------------------------
         
         X_input = np.array(recent_traffic).reshape(1, -1)
         X_scaled = self.scaler.transform(X_input)
@@ -77,6 +93,7 @@ class TrafficPredictor:
             "model_type": "MLPRegressor",
             "version": self.model_version,
             "is_trained": self.is_trained,
+            "window_size": self.window_size, # Dodajemy informację o oknie do API
             "hidden_layers": self.model.hidden_layer_sizes,
             "activation": self.model.activation,
             "solver": self.model.solver,

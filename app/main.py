@@ -2,6 +2,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
+import csv
+import os
+from datetime import datetime
 from typing import Dict
 
 from app.model import TrafficPredictor
@@ -15,8 +18,39 @@ logger = logging.getLogger(__name__)
 
 predictor: TrafficPredictor = None
 
-SCALE_UP_THRESHOLD = 80.0
-SCALE_DOWN_THRESHOLD = 30.0
+SCALE_UP_THRESHOLD =28.7 # Adjust this threshold based on your scaling policy
+SCALE_DOWN_THRESHOLD = 16.5  # Adjust this threshold based on your scaling policy
+LOG_FILE = "/app/logs/ai_decisions.csv"
+
+
+def log_decision_to_csv(server_id: str, input_traffic: list, predicted_load: float, action: str):
+    """Log AI prediction decision to CSV file for analysis."""
+    try:
+        # Calculate average traffic from input
+        avg_traffic = sum(input_traffic) / len(input_traffic) if input_traffic else 0.0
+        
+        # Ensure logs directory exists
+        log_dir = os.path.dirname(LOG_FILE)
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        
+        # Check if file exists to determine if we need to write header
+        file_exists = os.path.exists(LOG_FILE)
+        
+        with open(LOG_FILE, 'a', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            
+            # Write header if file is new
+            if not file_exists:
+                writer.writerow(['timestamp', 'server_id', 'input_avg_traffic', 'predicted_load', 'action'])
+            
+            # Write decision row
+            timestamp = datetime.utcnow().isoformat()
+            writer.writerow([timestamp, server_id, round(avg_traffic, 2), round(predicted_load, 2), action])
+        
+        logger.debug(f"Decision logged for {server_id}: {action}")
+    except Exception as e:
+        logger.error(f"Failed to log decision: {str(e)}")
 
 
 @asynccontextmanager
@@ -104,6 +138,10 @@ async def predict_traffic(payload: TrafficPayload) -> PredictionResult:
         )
         
         logger.info(f"{payload.server_id}: {action} ({predicted_load:.2f})")
+        
+        # Log decision to CSV
+        log_decision_to_csv(payload.server_id, payload.recent_traffic, predicted_load, action)
+        
         return result
         
     except ValueError as e:
@@ -130,12 +168,17 @@ async def predict_traffic_batch(payloads: list[TrafficPayload]) -> list[Predicti
             else:
                 action = "MAINTAIN"
             
-            results.append(PredictionResult(
+            result = PredictionResult(
                 server_id=payload.server_id,
                 predicted_load=round(predicted_load, 2),
                 action_suggested=action,
                 model_version=predictor.model_version
-            ))
+            )
+            
+            # Log decision to CSV
+            log_decision_to_csv(payload.server_id, payload.recent_traffic, predicted_load, action)
+            
+            results.append(result)
         except Exception as e:
             logger.error(f"Error processing {payload.server_id}: {str(e)}")
             continue

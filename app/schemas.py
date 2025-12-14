@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class TrafficPayload(BaseModel):
     server_id: str
-    recent_traffic: List[float] = Field(min_length=5, max_length=5)
+    recent_traffic: List[float]
     
     @field_validator('recent_traffic')
     @classmethod
