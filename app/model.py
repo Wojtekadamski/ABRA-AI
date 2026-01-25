@@ -36,19 +36,20 @@ class TrafficPredictor:
         for i in range(n_samples): # Generowanie syntetycznych danych
             time_offset = i * 0.1
             
-            base_pattern = 50 + 30 * np.sin(time_offset)
-            weekly_trend = 10 * np.sin(time_offset / 7)
+            # aby pasowały do rzeczywistego ruchu produkcyjnego 0-20 RPS
+            base_pattern = 15 + 10 * np.sin(time_offset)
+            weekly_trend = 5 * np.sin(time_offset / 7)
             
             # Używamy zmiennej self.window_size zamiast sztywnej liczby
-            noise = np.random.normal(0, 5, self.window_size) 
-            spike = np.random.choice([0, 20], size=self.window_size, p=[0.9, 0.1]) 
+            noise = np.random.normal(0, 2, self.window_size) # Zmniejszono z 5 na 2
+            spike = np.random.choice([0, 10], size=self.window_size, p=[0.9, 0.1]) # Zmniejszono z 20 na 10
             
             traffic_sequence = base_pattern + weekly_trend + noise + spike
             traffic_sequence = np.maximum(traffic_sequence, 0)
             X_train.append(traffic_sequence)
             
-            next_value = base_pattern + weekly_trend + np.random.normal(2, 5) + \
-                        np.random.choice([0, 20], p=[0.9, 0.1])
+            next_value = base_pattern + weekly_trend + np.random.normal(1, 2) + \
+                        np.random.choice([0, 10], p=[0.9, 0.1]) # Zmniejszono amplitudy
             next_value = max(next_value, 0)
             y_train.append(next_value)
         

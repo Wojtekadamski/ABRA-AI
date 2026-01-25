@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 predictor: TrafficPredictor = None
 
-SCALE_UP_THRESHOLD =28.7 # Adjust this threshold based on your scaling policy
-SCALE_DOWN_THRESHOLD = 16.5  # Adjust this threshold based on your scaling policy
+SCALE_UP_THRESHOLD =27 # Adjust this threshold based on your scaling policy
+SCALE_DOWN_THRESHOLD = 2,3  # Adjust this threshold based on your scaling policy
 LOG_FILE = "/app/logs/ai_decisions.csv"
 
 
